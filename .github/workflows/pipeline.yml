@@ -1,0 +1,104 @@
+name: Enterprise Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - run: zip app.zip *
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flask-app
+          path: app.zip
+
+  test:
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version:
+          - 3.9
+          - 3.10
+          - 3.11
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - run: pip install -r requirements.txt
+
+      - run: pytest
+
+  security_scan:
+    needs: test
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: |
+          pip install bandit
+          bandit -r .
+
+  deploy:
+    needs: security_scan
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Deploying application..."
+
+  health_check:
+    needs: deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Checking application health..."
+
+  rollback:
+    needs: health_check
+
+    if: failure()
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Rolling back deployment..."
+
+  notify:
+    needs: deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Deployment Successful"
+
+  dast_scan:
+    needs: deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "Running DAST Scan"
